@@ -1,0 +1,12 @@
+{
+  "name": "ecocesta",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "scraper": "node scripts/scraper.js",
+    "dev": "npx serve public -p 3000"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}

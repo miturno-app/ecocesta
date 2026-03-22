@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcoCesta — Compara precios en 5 supermercados</title>
+  <meta name="description" content="Compara precios de Mercadona, Carrefour, Lidl, Aldi y Eroski. Pega tu lista de la compra y descubre dónde comprar más barato." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,600;0,800;1,300&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green:#1a7a4a; --green-light:#e8f5ee; --green-mid:#2d9e65;
+      --cream:#faf8f3; --bark:#3d2b1f; --muted:#8a7f78; --gold:#e8a020;
+      --red:#dc2626;
+      /* Colores por supermercado — inspirados en su marca, sin usar logos */
+      --col-mercadona:#1a7a4a;  /* verde corporativo */
+      --col-carrefour:#003f8a;  /* azul Francia */
+      --col-lidl:#0050aa;       /* azul Lidl */
+      --col-aldi:#00529b;       /* azul Aldi */
+      --col-eroski:#e4002b;     /* rojo Eroski */
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--bark); display:flex; flex-direction:column; min-height:100vh; }
+    .font-display { font-family:'Fraunces',serif; }
+    ::-webkit-scrollbar { width:4px; }
+    ::-webkit-scrollbar-thumb { background:#c8bfb8; border-radius:4px; }
+
+    /* ── TOPBAR ── */
+    #topbar { background:#fff; border-bottom:1px solid #ede8e1; position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:12px; padding:10px 22px; }
+    #search-input { border:1.5px solid #ede8e1; border-radius:999px; padding:8px 16px; font-family:'DM Sans',sans-serif; font-size:14px; outline:none; width:250px; background:var(--cream); transition:border-color .2s; }
+    #search-input:focus { border-color:var(--green); }
+
+    /* ── SIDEBAR ── */
+    #sidebar { width:214px; min-width:214px; background:#fff; border-right:1px solid #ede8e1; height:calc(100vh - 53px); position:sticky; top:53px; overflow-y:auto; display:flex; flex-direction:column; }
+    #sidebar-scroll { padding:16px 10px; flex:1; overflow-y:auto; }
+    .cat-pill { display:flex; align-items:center; gap:9px; padding:8px 12px; border-radius:9px; cursor:pointer; font-size:13px; font-weight:500; color:var(--bark); transition:background .15s; }
+    .cat-pill:hover,.cat-pill.active { background:var(--green-light); color:var(--green); }
+    .cat-pill.active { font-weight:600; }
+
+    /* ── SUPER CHIPS (barra de estado) ── */
+    .super-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; border:1.5px solid; }
+
+    /* ── PRODUCT CARDS ── */
+    .product-card { background:#fff; border:1.5px solid #ede8e1; border-radius:15px; display:flex; flex-direction:column; padding:14px; gap:10px; transition:box-shadow .2s, transform .2s; }
+    .product-card:hover { box-shadow:0 6px 28px rgba(26,122,74,.10); transform:translateY(-2px); }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    .product-card { animation:fadeUp .25s ease both; }
+    .badge-cheap { color:#fff; font-size:10px; font-weight:600; padding:2px 7px; border-radius:999px; flex-shrink:0; }
+    .price-row { display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--muted); padding:3px 0; }
+    .cheapest-price { font-weight:700; }
+    .no-disponible { color:#d1ccc8; font-style:italic; font-size:11px; }
+    .super-label { display:flex; align-items:center; gap:5px; font-weight:600; }
+
+    /* ── BOTONES ── */
+    .btn-add { background:var(--green); color:#fff; border:none; border-radius:999px; padding:6px 15px; font-family:'DM Sans',sans-serif; font-weight:600; font-size:12px; cursor:pointer; transition:background .15s; display:flex; align-items:center; gap:5px; }
+    .btn-add:hover { background:var(--green-mid); }
+    .qty-ctrl { display:flex; align-items:center; gap:5px; background:var(--green-light); border-radius:999px; padding:3px 9px; }
+    .qty-btn { width:22px; height:22px; border-radius:50%; border:none; background:var(--green); color:#fff; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .qty-btn:hover { background:var(--green-mid); }
+    .qty-num { font-weight:700; font-size:13px; min-width:18px; text-align:center; color:var(--green); }
+
+    /* ── COMPARE BAR ── */
+    #compare-bar { position:fixed; bottom:0; left:0; right:0; z-index:50; background:var(--bark); color:#fff; padding:10px 22px; display:flex; align-items:center; gap:6px; transition:transform .35s cubic-bezier(.4,0,.2,1); box-shadow:0 -4px 28px rgba(0,0,0,.18); }
+    #compare-bar.hidden { transform:translateY(120%); }
+    .super-total { flex:1; text-align:center; padding:6px 8px; border-radius:10px; transition:background .2s; }
+    .super-total.cheapest { background:var(--green); }
+    .super-total-name { font-size:10px; letter-spacing:.06em; text-transform:uppercase; opacity:.65; display:flex; align-items:center; justify-content:center; gap:4px; }
+    .super-total-price { font-family:'Fraunces',serif; font-size:21px; font-weight:800; line-height:1.1; }
+    .super-total.cheapest .super-total-name { opacity:1; }
+    .savings-badge { background:var(--gold); color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; margin-top:2px; display:inline-block; }
+    .sync-info { font-size:10px; opacity:.45; white-space:nowrap; }
+
+    /* ── INFO BAR ── */
+    .info-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:10px; font-size:12px; margin-bottom:18px; }
+    .info-bar.ok   { background:#f0f9f4; border:1px solid #c3e8d4; color:var(--green); }
+    .info-bar.warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .info-bar.error{ background:#fef2f2; border:1px solid #fecaca; color:var(--red); }
+    .info-bar.loading { background:#faf8f3; border:1px solid #ede8e1; color:var(--muted); }
+
+    /* ── REFRESH BUTTON ── */
+    #btn-refresh { display:flex; align-items:center; gap:5px; padding:6px 13px; border-radius:999px; border:1.5px solid #ede8e1; background:#fff; color:var(--muted); font-family:'DM Sans',sans-serif; font-size:12px; cursor:pointer; transition:all .2s; white-space:nowrap; }
+    #btn-refresh:not(:disabled):hover { border-color:var(--green); color:var(--green); }
+    #btn-refresh:disabled { opacity:.35; cursor:not-allowed; }
+
+    /* ── LISTA INTELIGENTE ── */
+    #lista-btn { display:flex; align-items:center; gap:6px; padding:7px 13px; border-radius:999px; background:var(--green); color:#fff; border:none; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    #lista-btn:hover { background:var(--green-mid); }
+    #modal-lista { display:none; position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.5); align-items:center; justify-content:center; }
+    #modal-lista-inner { background:#fff; border-radius:20px; width:92%; max-width:580px; max-height:90vh; overflow-y:auto; }
+    .lista-result-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; margin-bottom:5px; }
+    .lista-result-row.encontrado   { background:#f0faf4; border:1px solid #c3e8d4; }
+    .lista-result-row.no-encontrado{ background:#fef2f2; border:1px solid #fecaca; }
+    .lista-result-row.sugerido     { background:#fffbeb; border:1px solid #fde68a; }
+    .lista-pill-ok { background:var(--green); color:#fff; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; flex-shrink:0; }
+    .lista-pill-no { background:#fee2e2; color:#991b1b; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; flex-shrink:0; }
+    .lista-pill-ia { background:#fef3c7; color:#92400e; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; flex-shrink:0; }
+    .lista-add-btn { margin-left:auto; padding:4px 12px; border-radius:999px; border:none; background:var(--green); color:#fff; font-size:11px; font-weight:600; cursor:pointer; flex-shrink:0; }
+    .lista-add-btn:hover { background:var(--green-mid); }
+    .lista-add-btn.added { background:#e8f5ee; color:var(--green); pointer-events:none; }
+    #lista-textarea { width:100%; padding:12px; border:1.5px solid #ede8e1; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:13px; resize:vertical; outline:none; background:#faf8f3; color:var(--bark); line-height:1.7; box-sizing:border-box; }
+    #lista-textarea:focus { border-color:var(--green); }
+
+    /* ── TOAST ── */
+    .toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(10px); background:var(--bark); color:#fff; padding:10px 22px; border-radius:999px; font-size:13px; font-weight:600; z-index:200; white-space:nowrap; opacity:0; transition:opacity .3s, transform .3s; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .toast.green { background:var(--green); }
+    .toast.warn  { background:var(--gold); }
+
+    /* ── FOOTER ── */
+    #footer { background:#fff; border-top:1px solid #ede8e1; padding:16px 24px; margin-top:auto; }
+    .footer-disclaimer { font-size:11px; color:var(--muted); line-height:1.7; }
+    .footer-disclaimer a { color:var(--muted); text-decoration:underline; }
+    .apoyo-btn { display:inline-flex; align-items:center; gap:7px; padding:8px 16px; border-radius:12px; background:var(--cream); border:1.5px solid #ede8e1; text-decoration:none; color:var(--bark); font-size:12px; font-weight:600; transition:background .15s, border-color .15s; }
+    .apoyo-btn:hover { background:var(--green-light); border-color:var(--green); color:var(--green); }
+
+    /* ── IMG PRODUCT ── */
+    .product-img { width:52px; height:52px; object-fit:contain; border-radius:7px; background:#f5f2ee; flex-shrink:0; }
+    .img-fallback { width:52px; height:52px; border-radius:7px; background:#f5f2ee; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+    .empty-state { opacity:.4; text-align:center; padding:70px 20px; }
+
+    .cart-dot { position:absolute; top:-4px; right:-4px; width:17px; height:17px; background:var(--green); color:#fff; border-radius:50%; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  </style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<header id="topbar">
+  <a href="/" class="font-display font-bold" style="font-size:22px;color:var(--green);text-decoration:none;flex-shrink:0">
+    Eco<span style="color:var(--bark)">Cesta</span>
+  </a>
+  <input id="search-input" type="text" placeholder="🔍  Buscar producto…" oninput="onBusqueda()" />
+  <div style="flex:1"></div>
+  <button id="lista-btn" onclick="abrirLista()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Lista inteligente
+  </button>
+  <button id="btn-refresh" onclick="forzarActualizacion()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    Actualizar
+  </button>
+  <div id="update-info" style="font-size:10px;color:var(--muted);text-align:right;line-height:1.5;flex-shrink:0"></div>
+  <div style="position:relative;cursor:pointer;flex-shrink:0" onclick="window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})">
+    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="color:var(--bark);display:block">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1.35 2.7A1 1 0 0 0 6.54 17H17M7 13L5.4 5M17 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
+    </svg>
+    <span id="cart-badge" class="cart-dot" style="display:none">0</span>
+  </div>
+</header>
+
+<!-- ── LAYOUT ── -->
+<div style="display:flex;flex:1;padding-bottom:110px">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div id="sidebar-scroll">
+      <p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">Categorías</p>
+      <div id="cat-list"></div>
+
+      <div style="margin-top:20px;border-top:1px solid #ede8e1;padding-top:14px">
+        <p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">Supermercados</p>
+        <div id="super-status" style="display:flex;flex-direction:column;gap:7px"></div>
+      </div>
+
+      <!-- APOYA EL PROYECTO -->
+      <div style="margin-top:20px;border-top:1px solid #ede8e1;padding-top:14px">
+        <p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">¿Te es útil?</p>
+        <!-- CAMBIA esta URL por tu enlace de PayPal, Ko-fi o BuyMeACoffee -->
+        <a href="https://buymeacoffee.com/TU_USUARIO" target="_blank" rel="noopener" class="apoyo-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          Apoya este proyecto
+        </a>
+        <p style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Proyecto personal y gratuito. Un café ayuda a mantenerlo. ☕</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main style="flex:1;padding:20px 22px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+      <h1 class="font-display" style="font-size:26px;font-weight:700" id="section-title">Todos los productos</h1>
+      <span id="result-count" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="info-bar" class="info-bar loading">
+      <span id="info-icon">⏳</span>
+      <span id="info-text">Cargando precios…</span>
+    </div>
+    <div id="product-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px"></div>
+    <div id="empty-state" class="empty-state" style="display:none">
+      <div style="font-size:44px;margin-bottom:10px">🌿</div>
+      <p class="font-display" style="font-size:19px">Sin resultados</p>
+      <p style="font-size:13px;margin-top:5px">Prueba con otro término o categoría</p>
+    </div>
+  </main>
+</div>
+
+<!-- ── COMPARE BAR ── -->
+<div id="compare-bar" class="hidden">
+  <div style="margin-right:16px;flex-shrink:0">
+    <p class="font-display" style="font-size:15px;font-weight:300;font-style:italic;opacity:.6">Tu cesta</p>
+    <p id="bar-items" style="font-size:10px;opacity:.4">0 productos</p>
+  </div>
+  <div id="super-totals" style="display:flex;flex:1;gap:6px"></div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-left:16px;flex-shrink:0">
+    <p id="sync-time" class="sync-info"></p>
+    <button onclick="vaciarCesta()" style="font-size:11px;opacity:.45;background:none;border:none;color:#fff;cursor:pointer;text-decoration:underline">Vaciar</button>
+  </div>
+</div>
+
+<!-- ── MODAL LISTA INTELIGENTE ── -->
+<div id="modal-lista">
+  <div id="modal-lista-inner">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid #ede8e1">
+      <div>
+        <p class="font-display" style="font-size:20px;font-weight:700;color:var(--bark)">Lista inteligente</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:3px">Escribe o pega tu lista en lenguaje normal. La web lo entiende.</p>
+      </div>
+      <button onclick="cerrarLista()" style="border:none;background:#f4f0eb;border-radius:50%;width:30px;height:30px;font-size:15px;cursor:pointer;color:var(--muted);flex-shrink:0">✕</button>
+    </div>
+    <div style="padding:16px 20px 0">
+      <textarea id="lista-textarea" rows="8"
+        placeholder="Escribe aquí tu lista, por ejemplo:&#10;&#10;- 1 litro de leche entera&#10;- Huevos (una docena)&#10;- Aceite de oliva&#10;- Comprar pan de molde&#10;- Pechuga de pollo&#10;- Un paquete de pasta&#10;- Cerveza&#10;- Detergente para la lavadora">
+      </textarea>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">Ignora palabras como "comprar", "un paquete de"… Escribe con total naturalidad.</p>
+    </div>
+    <div style="padding:12px 20px">
+      <button id="btn-analizar-lista" onclick="analizarLista()"
+        style="width:100%;padding:11px;border-radius:999px;border:none;background:var(--green);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">
+        🔍 Analizar lista
+      </button>
+    </div>
+    <div id="lista-resultados" style="display:none;padding:0 20px 6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Resultados</p>
+        <div style="display:flex;gap:8px;font-size:11px">
+          <span id="stat-enc"  style="color:var(--green);font-weight:600"></span>
+          <span id="stat-sug"  style="color:#92400e;font-weight:600"></span>
+          <span id="stat-nenc" style="color:var(--red);font-weight:600"></span>
+        </div>
+      </div>
+      <div id="lista-items"></div>
+    </div>
+    <div id="lista-footer" style="display:none;padding:14px 20px;border-top:1px solid #ede8e1;align-items:center;justify-content:space-between">
+      <p id="lista-footer-txt" style="font-size:12px;color:var(--muted)"></p>
+      <button onclick="anadirTodos()"
+        style="padding:9px 20px;border-radius:999px;border:none;background:var(--green);color:#fff;font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">
+        ✓ Añadir todos a la cesta
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer id="footer">
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:700px">
+    <p class="footer-disclaimer">
+      <strong>Aviso legal:</strong> EcoCesta es una herramienta informativa de carácter personal y sin ánimo de lucro.
+      Los precios mostrados son <strong>orientativos</strong>, se obtienen de fuentes públicas y pueden no reflejar el precio exacto
+      en tu establecimiento más cercano. EcoCesta no tiene ninguna relación oficial, comercial ni de patrocinio con
+      Mercadona, Carrefour, Lidl, Aldi ni Eroski. Las marcas y nombres comerciales pertenecen a sus respectivos titulares.
+    </p>
+    <p class="footer-disclaimer">
+      Actualización automática diaria · Datos orientativos ·
+      <a href="mailto:contacto@ecocesta.es">Contacto</a> ·
+      <span id="footer-año"></span> EcoCesta
+    </p>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN DE SUPERMERCADOS
+// Colores e iconos SVG propios (sin logos oficiales)
+// ============================================================
+const SUPERS_CONFIG = {
+  Mercadona: {
+    color: '#1a7a4a',
+    bg:    '#e8f5ee',
+    // Icono: cesta de compra (propio)
+    icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
+    url: 'https://tienda.mercadona.es'
+  },
+  Carrefour: {
+    color: '#003f8a',
+    bg:    '#e8f0fe',
+    // Icono: camión de reparto
+    icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
+    url: 'https://www.carrefour.es'
+  },
+  Lidl: {
+    color: '#0050aa',
+    bg:    '#e8f0fe',
+    // Icono: etiqueta de precio
+    icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+    url: 'https://www.lidl.es'
+  },
+  Aldi: {
+    color: '#00529b',
+    bg:    '#e8f0fe',
+    // Icono: ahorro / percentaje
+    icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>`,
+    url: 'https://www.aldi.es'
+  },
+  Eroski: {
+    color: '#e4002b',
+    bg:    '#fef2f2',
+    // Icono: corazón (cooperativa)
+    icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+    url: 'https://supermercado.eroski.es'
+  }
+};
+
+const SUPERS = Object.keys(SUPERS_CONFIG);
+
+const CAT_ICONS = {
+  Todos:'🛒','Lácteos':'🥛','Aceites':'🫙','Cereales y pasta':'🍝','Legumbres':'🫘',
+  'Panadería':'🍞','Conservas':'🥫','Carne':'🥩','Charcutería':'🍖','Pescado':'🐟',
+  'Frutas':'🍎','Verduras':'🥦','Congelados':'🧊','Bebidas':'🍹',
+  'Café e infusiones':'☕','Limpieza':'🧹','Higiene':'🧴','Papel y hogar':'🧻',
+  'Dulces y repostería':'🍫','Frutos secos':'🥜','Aperitivos':'🍿',
+  'Mascotas':'🐾','Otros':'📦'
+};
+
+// ============================================================
+// ESTADO
+// ============================================================
+let inventario    = [];
+let cart          = JSON.parse(localStorage.getItem('ecocesta_cart')    || '{}');
+let activeCategory= 'Todos';
+let searchTimer;
+let resultadosLista = [];
+let ultimaActualizacion = null;
+// Rate limit: guarda el timestamp del último refresco manual
+let ultimoRefrescoManual = parseInt(localStorage.getItem('ecocesta_last_refresh') || '0');
+const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
+
+// ============================================================
+// ── UTILIDAD CLAVE 1: normalizarPrecio ──
+// Convierte CUALQUIER valor a Float limpio. Nunca devuelve NaN.
+// Ejemplos: "1,25 €" → 1.25 | "1.25€" → 1.25 | null → 0
+// ============================================================
+function normalizarPrecio(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return isNaN(v) ? 0 : Math.round(v * 100) / 100;
+  if (typeof v === 'object') {
+    // algunos APIs devuelven objetos {value, currency}
+    return normalizarPrecio(v.value ?? v.price ?? v.unit_price ?? 0);
+  }
+  // string: quitar símbolo €, espacios, convertir coma decimal a punto
+  const limpio = String(v)
+    .replace(/[€$£\s]/g, '')
+    .replace(',', '.');
+  const n = parseFloat(limpio);
+  return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+}
+
+// ============================================================
+// ── UTILIDAD CLAVE 2: precioSeguro ──
+// Lee el precio de un producto para un supermercado concreto.
+// Si no existe o es 0 devuelve null (→ "No disponible").
+// ============================================================
+function precioSeguro(producto, super_) {
+  if (!producto?.precios) return null;
+  const v = normalizarPrecio(producto.precios[super_]);
+  return v > 0 ? v : null;
+}
+
+// ============================================================
+// ── UTILIDAD CLAVE 3: cheapestSuper ──
+// Encuentra el supermercado más barato de forma segura.
+// ============================================================
+function cheapestSuper(precios) {
+  const entries = SUPERS
+    .map(s => [s, normalizarPrecio(precios?.[s])])
+    .filter(([, v]) => v > 0);
+  return entries.length ? entries.reduce((a, b) => a[1] < b[1] ? a : b) : [null, 0];
+}
+
+// ============================================================
+// CARGA DE DATOS con FALLBACK a localStorage
+// ============================================================
+async function cargarPrecios(forzar = false) {
+  setInfoBar('loading', '⏳', 'Cargando precios…');
+  try {
+    const res = await fetch(`precios.json?v=${Date.now()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (!data.productos?.length) throw new Error('El archivo de precios está vacío');
+
+    inventario = data.productos.map(p => ({
+      ...p,
+      // Normalizar todos los precios al cargar — nunca habrá NaN en runtime
+      precios: Object.fromEntries(
+        Object.entries(p.precios || {}).map(([s, v]) => [s, normalizarPrecio(v)])
+      )
+    }));
+
+    ultimaActualizacion = data.actualizadoEn ? new Date(data.actualizadoEn) : new Date();
+    localStorage.setItem('ecocesta_inventario', JSON.stringify(inventario));
+    localStorage.setItem('ecocesta_updated', ultimaActualizacion.toISOString());
+
+    actualizarDotsSupers(data.fuentes || {});
+    actualizarSyncInfo();
+    setInfoBar('ok', '✅', `${inventario.length} productos · ${SUPERS.length} supermercados`);
+    renderAll();
+
+  } catch (err) {
+    console.warn('Fallo carga remota:', err.message);
+
+    // ── FALLBACK: usar datos del localStorage ──
+    const cached      = localStorage.getItem('ecocesta_inventario');
+    const cachedDate  = localStorage.getItem('ecocesta_updated');
+
+    if (cached) {
+      inventario = JSON.parse(cached);
+      ultimaActualizacion = cachedDate ? new Date(cachedDate) : null;
+      actualizarSyncInfo();
+      setInfoBar('warn', '📦', 'Usando datos guardados localmente · Los precios pueden estar desactualizados');
+      renderAll();
+      mostrarToast('Usando datos guardados localmente', 'warn');
+    } else {
+      setInfoBar('error', '❌', 'No se pudieron cargar los precios. Comprueba tu conexión.');
+    }
+  }
+}
+
+function actualizarDotsSupers(fuentes) {
+  const contenedor = document.getElementById('super-status');
+  if (!contenedor) return;
+  contenedor.innerHTML = SUPERS.map(s => {
+    const cfg = SUPERS_CONFIG[s];
+    const activo = (fuentes[s] || 0) > 0;
+    return `<div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--bark)">
+      <span style="width:7px;height:7px;border-radius:50%;background:${activo?'#22c55e':'#f87171'};flex-shrink:0"></span>
+      <span style="color:${cfg.color}">${cfg.icon.replace('stroke="currentColor"','stroke="'+cfg.color+'"')}</span>
+      ${s}
+    </div>`;
+  }).join('');
+}
+
+function actualizarSyncInfo() {
+  if (!ultimaActualizacion) return;
+  const ahora  = new Date();
+  const diffMs = ahora - ultimaActualizacion;
+  const diffH  = Math.floor(diffMs / 3600000);
+  const diffM  = Math.floor((diffMs % 3600000) / 60000);
+  const texto  = diffH > 0
+    ? `Precios actualizados hace ${diffH}h ${diffM}m`
+    : `Precios actualizados hace ${diffM} minutos`;
+
+  const el = document.getElementById('update-info');
+  if (el) el.innerHTML = texto.replace('Precios actualizados', 'Actualizado');
+
+  const syncEl = document.getElementById('sync-time');
+  if (syncEl) syncEl.textContent = texto;
+
+  // Actualizar cada minuto
+  setTimeout(actualizarSyncInfo, 60000);
+}
+
+// ── REFRESH con rate limiting ──
+async function forzarActualizacion() {
+  const ahora = Date.now();
+  const tiempoRestante = COOLDOWN_MS - (ahora - ultimoRefrescoManual);
+
+  if (tiempoRestante > 0) {
+    const min = Math.ceil(tiempoRestante / 60000);
+    mostrarToast(`Espera ${min} minuto${min!==1?'s':''} antes de volver a actualizar`, 'warn');
+    return;
+  }
+
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Actualizando…`;
+
+  ultimoRefrescoManual = ahora;
+  localStorage.setItem('ecocesta_last_refresh', String(ahora));
+  await cargarPrecios(true);
+
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Actualizar`;
+}
+
+// ============================================================
+// CATEGORÍAS
+// ============================================================
+function renderCategories() {
+  const cats = ['Todos', ...new Set(inventario.map(p => p.categoria).filter(Boolean).sort())];
+  document.getElementById('cat-list').innerHTML = cats.map(c =>
+    `<div class="cat-pill ${c===activeCategory?'active':''}" onclick="setCategory(${JSON.stringify(c)})">
+      <span style="font-size:14px">${CAT_ICONS[c]||'📦'}</span><span>${c}</span>
+    </div>`
+  ).join('');
+}
+
+function setCategory(c) { activeCategory = c; renderAll(); }
+
+// ============================================================
+// BÚSQUEDA
+// ============================================================
+function onBusqueda() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderProducts, 150);
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+function renderProducts() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  let items = activeCategory === 'Todos' ? inventario : inventario.filter(p => p.categoria === activeCategory);
+  if (q) items = items.filter(p => p.nombre.toLowerCase().includes(q));
+
+  document.getElementById('section-title').textContent =
+    activeCategory === 'Todos' ? 'Todos los productos' : activeCategory;
+  document.getElementById('result-count').textContent =
+    `${items.length} producto${items.length !== 1 ? 's' : ''}`;
+
+  const grid  = document.getElementById('product-grid');
+  const empty = document.getElementById('empty-state');
+  if (!items.length) { grid.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  grid.innerHTML = items.map((p, i) => {
+    const qty = cart[p.id] || 0;
+    const [cheapSup, cheapPrice] = cheapestSuper(p.precios);
+    const emoji = CAT_ICONS[p.categoria] || '🛒';
+
+    const imgTag = p.imagen
+      ? `<img src="${p.imagen}" alt="" class="product-img" onerror="this.outerHTML='<div class=img-fallback>${emoji}</div>'">`
+      : `<div class="img-fallback">${emoji}</div>`;
+
+    // Filas de precios con gestión de "No disponible"
+    const priceRows = SUPERS.map(s => {
+      const cfg = SUPERS_CONFIG[s];
+      const v   = precioSeguro(p, s);
+      const isCheap = s === cheapSup && v !== null;
+
+      // Nombre del super como enlace afiliado si hay URL del producto
+      const productoUrl = p.urls?.[s] || cfg.url;
+      const superLabel = `<a href="${productoUrl}" target="_blank" rel="noopener"
+        class="super-label" style="color:${cfg.color};text-decoration:none;"
+        title="Ver en ${s}">
+        ${cfg.icon.replace('stroke="currentColor"', `stroke="${cfg.color}"`)}
+        ${s}
+      </a>`;
+
+      if (v === null) {
+        return `<div class="price-row">${superLabel}<span class="no-disponible">No disponible</span></div>`;
+      }
+      return `<div class="price-row">
+        ${superLabel}
+        <span class="${isCheap ? 'cheapest-price' : ''}" style="${isCheap ? `color:${cfg.color}` : ''}">
+          ${v.toFixed(2)} €${isCheap ? ' ✓' : ''}
+        </span>
+      </div>`;
+    }).join('');
+
+    const cheapCfg = cheapSup ? SUPERS_CONFIG[cheapSup] : null;
+
+    const cta = qty === 0
+      ? `<button class="btn-add" onclick="addToCart('${p.id}')">+ Añadir</button>`
+      : `<div class="qty-ctrl">
+          <button class="qty-btn" onclick="removeFromCart('${p.id}')">−</button>
+          <span class="qty-num">${qty}</span>
+          <button class="qty-btn" onclick="addToCart('${p.id}')">+</button>
+        </div>`;
+
+    return `<div class="product-card" style="animation-delay:${Math.min(i*22,350)}ms">
+      <div style="display:flex;align-items:flex-start;gap:9px">
+        ${imgTag}
+        <div style="flex:1;min-width:0">
+          <p style="font-size:12px;font-weight:600;line-height:1.3;color:var(--bark)">${p.nombre}</p>
+          <p style="font-size:10px;color:var(--muted);margin-top:2px">${p.categoria||'Otros'}</p>
+        </div>
+        ${cheapSup ? `<span class="badge-cheap" style="background:${cheapCfg.color}">${cheapSup}</span>` : ''}
+      </div>
+      <div style="border-top:1px solid #f0ebe4;padding-top:8px">${priceRows}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto">
+        <div>
+          <p style="font-size:10px;color:var(--muted)">Desde</p>
+          <p class="font-display" style="font-size:20px;font-weight:800;color:${cheapCfg?.color||'var(--green)'}">
+            ${cheapPrice > 0 ? cheapPrice.toFixed(2) + ' €' : '—'}
+          </p>
+        </div>
+        ${cta}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// CESTA
+// ============================================================
+function saveCart() { localStorage.setItem('ecocesta_cart', JSON.stringify(cart)); }
+function addToCart(id) { cart[id] = (cart[id] || 0) + 1; saveCart(); renderAll(); }
+function removeFromCart(id) {
+  if (!cart[id]) return;
+  cart[id]--;
+  if (!cart[id]) delete cart[id];
+  saveCart(); renderAll();
+}
+function vaciarCesta() { cart = {}; saveCart(); renderAll(); }
+
+// ============================================================
+// BARRA COMPARADORA
+// ============================================================
+function renderCompareBar() {
+  const bar   = document.getElementById('compare-bar');
+  const total = Object.values(cart).reduce((s, v) => s + v, 0);
+
+  if (!total) {
+    bar.classList.add('hidden');
+    document.getElementById('cart-badge').style.display = 'none';
+    return;
+  }
+  bar.classList.remove('hidden');
+  document.getElementById('bar-items').textContent = `${total} producto${total !== 1 ? 's' : ''}`;
+  document.getElementById('cart-badge').textContent = total;
+  document.getElementById('cart-badge').style.display = 'flex';
+
+  // Sumar totales de forma segura
+  const totals = {};
+  SUPERS.forEach(s => totals[s] = 0);
+
+  Object.entries(cart).forEach(([id, qty]) => {
+    const prod = inventario.find(x => x.id === id);
+    if (!prod) return;
+    SUPERS.forEach(s => {
+      const v = precioSeguro(prod, s);
+      if (v !== null) totals[s] += v * qty;
+    });
+  });
+
+  const activos = SUPERS.filter(s => totals[s] > 0);
+  const min     = activos.length ? Math.min(...activos.map(s => totals[s])) : 0;
+  const max     = activos.length ? Math.max(...activos.map(s => totals[s])) : 0;
+  const ahorro  = (max - min).toFixed(2);
+
+  document.getElementById('super-totals').innerHTML = SUPERS.map(s => {
+    const cfg     = SUPERS_CONFIG[s];
+    const isCheap = totals[s] > 0 && totals[s] === min && activos.length > 1;
+    if (!totals[s]) {
+      return `<div class="super-total" style="opacity:.2">
+        <div class="super-total-name">${cfg.icon.replace('stroke="currentColor"','stroke="#fff"')} ${s}</div>
+        <div class="super-total-price">—</div>
+      </div>`;
+    }
+    return `<div class="super-total ${isCheap ? 'cheapest' : ''}">
+      <div class="super-total-name" style="color:${isCheap ? '#fff' : cfg.color}">
+        ${cfg.icon.replace('stroke="currentColor"', `stroke="${isCheap?'#fff':cfg.color}"`)} ${s}
+      </div>
+      <div class="super-total-price">${totals[s].toFixed(2)} €</div>
+      ${isCheap && parseFloat(ahorro) > 0
+        ? `<div><span class="savings-badge">Ahorras ${ahorro} €</span></div>`
+        : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderAll() { renderCategories(); renderProducts(); renderCompareBar(); }
+
+// ============================================================
+// LISTA INTELIGENTE
+// ============================================================
+const PALABRAS_RUIDO = [
+  'comprar','compra','necesito','quiero','ponme','dame','trae','añade',
+  'un','una','unos','unas','el','la','los','las','de','del','para',
+  'paquete','bote','botella','lata','caja','bolsa','brick','litro',
+  'litros','kilo','kilos','gramos','gramo','unidad','unidades','docena',
+  'ese','esa','esos','esas','este','esta','mismo','misma',
+  'necesitamos','falta','faltan','hay','que','con','sin','y','o'
+];
+
+function limpiarLinea(linea) {
+  return linea
+    .toLowerCase()
+    .replace(/^\s*[-•*·✓✗\d.]+\s*/, '')
+    .replace(/\(.*?\)/g, '')
+    .replace(/\d+\s*(kg|g|l|ml|ud|uds|paq|brik?|litro[s]?|kilo[s]?|gramo[s]?)?/gi, '')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !PALABRAS_RUIDO.includes(w))
+    .join(' ')
+    .trim();
+}
+
+function buscarEnInventario(termino) {
+  if (!termino || termino.length < 2) return null;
+  const t = termino.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  // 1. Nombre del producto contiene el término completo
+  let found = inventario.find(p =>
+    p.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
+  );
+  if (found) return { producto: found, tipo: 'exacto' };
+
+  // 2. Todas las palabras del término están en el nombre
+  const palabras = t.split(' ').filter(w => w.length > 2);
+  if (palabras.length) {
+    found = inventario.find(p =>
+      palabras.every(w => p.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(w))
+    );
+    if (found) return { producto: found, tipo: 'exacto' };
+  }
+
+  // 3. Coincidencia parcial por score
+  if (palabras.length) {
+    const scored = inventario
+      .map(p => {
+        const n = p.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        const hits = palabras.filter(w => n.includes(w)).length;
+        return { producto: p, score: hits / palabras.length };
+      })
+      .filter(x => x.score >= 0.5)
+      .sort((a, b) => b.score - a.score);
+    if (scored.length) return { producto: scored[0].producto, tipo: 'parcial' };
+  }
+
+  return null;
+}
+
+function abrirLista() {
+  document.getElementById('modal-lista').style.display = 'flex';
+  document.getElementById('lista-resultados').style.display = 'none';
+  document.getElementById('lista-footer').style.display = 'none';
+  document.getElementById('lista-textarea').focus();
+  resultadosLista = [];
+}
+
+function cerrarLista() {
+  document.getElementById('modal-lista').style.display = 'none';
+}
+
+async function analizarLista() {
+  const texto = document.getElementById('lista-textarea').value.trim();
+  if (!texto) { alert('Escribe primero tu lista.'); return; }
+
+  const btn = document.getElementById('btn-analizar-lista');
+  btn.textContent = '⏳ Analizando…'; btn.disabled = true;
+
+  const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+  const resultados   = [];
+  const noEncontrados = [];
+
+  // PASO 1 — búsqueda rápida
+  for (const lineaOriginal of lineas) {
+    const limpia = limpiarLinea(lineaOriginal);
+    if (!limpia) continue;
+    const r = buscarEnInventario(limpia);
+    if (r) {
+      resultados.push({ lineaOriginal, limpia, producto: r.producto, tipo: r.tipo, estado: 'encontrado' });
+    } else {
+      noEncontrados.push({ lineaOriginal, limpia });
+    }
+  }
+
+  // PASO 2 — IA para los no encontrados
+  let sugerencias = {};
+  if (noEncontrados.length > 0) {
+    btn.textContent = `⏳ Buscando ${noEncontrados.length} con IA…`;
+    sugerencias = await buscarConIA(noEncontrados.map(x => x.limpia));
+  }
+
+  const todos = [
+    ...resultados,
+    ...noEncontrados.map(({ lineaOriginal, limpia }) => {
+      const sug  = sugerencias[limpia];
+      const prod = sug ? inventario.find(p => p.id === sug.id) : null;
+      return {
+        lineaOriginal, limpia,
+        producto: prod || null,
+        tipo: prod ? 'ia' : 'no_encontrado',
+        estado: prod ? 'sugerido' : 'no_encontrado',
+        motivo: sug?.motivo || null
+      };
+    })
+  ];
+
+  resultadosLista = todos;
+  mostrarResultadosLista(todos);
+  btn.textContent = '🔍 Analizar lista'; btn.disabled = false;
+}
+
+async function buscarConIA(terminos) {
+  if (!terminos.length) return {};
+  try {
+    const muestra = inventario.slice(0, 80).map(p => ({ id: p.id, nombre: p.nombre }));
+    const prompt = `Tengo un catálogo de supermercado con estos productos:\n${JSON.stringify(muestra)}\n\nEl usuario escribió estos artículos que no encontré automáticamente:\n${terminos.map((t,i)=>`${i+1}. "${t}"`).join('\n')}\n\nPara cada uno, encuentra el producto más similar del catálogo o null si no hay nada parecido.\n\nResponde SOLO con JSON válido:\n{"termino": {"id":"id_producto","motivo":"razón breve"}}`;
+
+    const res  = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
+    });
+    const data = await res.json();
+    return JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
+  } catch(e) { return {}; }
+}
+
+function mostrarResultadosLista(resultados) {
+  const enc  = resultados.filter(r => r.estado === 'encontrado');
+  const sug  = resultados.filter(r => r.estado === 'sugerido');
+  const nenc = resultados.filter(r => r.estado === 'no_encontrado');
+
+  document.getElementById('stat-enc').textContent  = enc.length  ? `✓ ${enc.length} encontrados` : '';
+  document.getElementById('stat-sug').textContent  = sug.length  ? `~ ${sug.length} sugeridos`   : '';
+  document.getElementById('stat-nenc').textContent = nenc.length ? `✗ ${nenc.length} no encontrados` : '';
+
+  document.getElementById('lista-items').innerHTML = resultados.map((r, idx) => {
+    if (r.estado === 'no_encontrado') {
+      return `<div class="lista-result-row no-encontrado">
+        <span class="lista-pill-no">✗ No encontrado</span>
+        <div style="flex:1">
+          <p style="font-size:12px;font-weight:600;color:var(--red)">"${r.lineaOriginal}"</p>
+          <p style="font-size:10px;color:var(--muted)">Este producto no está en el catálogo</p>
+        </div>
+      </div>`;
+    }
+
+    const p           = r.producto;
+    const [cheapSup]  = cheapestSuper(p.precios);
+    const cheapV      = cheapSup ? precioSeguro(p, cheapSup) : null;
+    const cheapCfg    = cheapSup ? SUPERS_CONFIG[cheapSup] : null;
+    const enCesta     = (cart[p.id] || 0) > 0;
+
+    return `<div class="lista-result-row ${r.estado}" id="lista-row-${idx}">
+      <span class="${r.estado==='encontrado'?'lista-pill-ok':'lista-pill-ia'}">
+        ${r.estado==='encontrado'?'✓ Encontrado':'~ Sugerencia IA'}
+      </span>
+      <div style="flex:1;min-width:0">
+        <p style="font-size:10px;color:var(--muted)">"${r.lineaOriginal}"</p>
+        <p style="font-size:12px;font-weight:600;color:var(--bark)">${p.nombre}</p>
+        ${r.motivo ? `<p style="font-size:10px;color:var(--muted)">${r.motivo}</p>` : ''}
+        ${cheapSup && cheapV !== null
+          ? `<p style="font-size:10px;font-weight:600;color:${cheapCfg.color}">Desde ${cheapV.toFixed(2)} € en ${cheapSup}</p>`
+          : ''}
+      </div>
+      <button id="lista-btn-${idx}" class="lista-add-btn ${enCesta?'added':''}"
+        onclick="anadirDesdeLista('${p.id}',${idx})">
+        ${enCesta ? 'En cesta ✓' : 'Añadir'}
+      </button>
+    </div>`;
+  }).join('');
+
+  document.getElementById('lista-resultados').style.display = 'block';
+
+  const conProducto = resultados.filter(r => r.producto);
+  if (conProducto.length) {
+    const footer = document.getElementById('lista-footer');
+    footer.style.display = 'flex';
+    document.getElementById('lista-footer-txt').textContent =
+      `${conProducto.length} producto${conProducto.length!==1?'s':''} listos para añadir`;
+  }
+}
+
+function anadirDesdeLista(productoId, idx) {
+  addToCart(productoId);
+  const btn = document.getElementById(`lista-btn-${idx}`);
+  if (btn) { btn.textContent = 'En cesta ✓'; btn.classList.add('added'); }
+}
+
+function anadirTodos() {
+  const conProducto = resultadosLista.filter(r => r.producto);
+  conProducto.forEach(r => addToCart(r.producto.id));
+  renderAll();
+  cerrarLista();
+  // ── FEEDBACK de usuario: mensaje de éxito con cantidad exacta ──
+  const n = conProducto.length;
+  mostrarToast(`¡${n} producto${n!==1?'s':''} añadido${n!==1?'s':''} correctamente!`, 'green');
+}
+
+// ============================================================
+// TOAST (feedback visual)
+// ============================================================
+let toastTimer;
+function mostrarToast(msg, tipo = 'green') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${tipo}`;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ============================================================
+// UTILIDADES
+// ============================================================
+document.getElementById('modal-lista').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-lista')) cerrarLista();
+});
+
+// Añadir animación spin al CSS dinámicamente
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }';
+document.head.appendChild(style);
+
+// Año en el footer
+document.getElementById('footer-año').textContent = new Date().getFullYear();
+
+// ============================================================
+// INICIO
+// ============================================================
+cargarPrecios();
+</script>
+</body>
+</html>

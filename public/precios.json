@@ -1,0 +1,33 @@
+{
+  "actualizadoEn": "2025-01-01T00:00:00.000Z",
+  "totalProductos": 3,
+  "supermercados": ["Mercadona", "Carrefour", "Lidl", "Aldi", "Eroski"],
+  "fuentes": { "Mercadona": 1, "Carrefour": 1, "Lidl": 1, "Aldi": 1, "Eroski": 1 },
+  "errores": {},
+  "productos": [
+    {
+      "id": "leche_entera_1l",
+      "nombre": "Leche Entera (1L)",
+      "categoria": "Lácteos",
+      "imagen": "",
+      "urls": {},
+      "precios": { "Mercadona": 0.95, "Carrefour": 1.02, "Lidl": 0.89, "Aldi": 0.87, "Eroski": 0.99 }
+    },
+    {
+      "id": "aceite_oliva",
+      "nombre": "Aceite de Oliva Virgen Extra (1L)",
+      "categoria": "Aceites",
+      "imagen": "",
+      "urls": {},
+      "precios": { "Mercadona": 8.50, "Carrefour": 9.10, "Lidl": 8.40, "Aldi": 8.20, "Eroski": 8.75 }
+    },
+    {
+      "id": "huevos_docena",
+      "nombre": "Huevos Grandes L (docena)",
+      "categoria": "Lácteos",
+      "imagen": "",
+      "urls": {},
+      "precios": { "Mercadona": 2.45, "Carrefour": 2.60, "Lidl": 2.35, "Aldi": 2.29, "Eroski": 2.55 }
+    }
+  ]
+}
